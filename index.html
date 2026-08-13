@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>A Little Quest for the Weekend 🟩</title>
+
+<!-- Pixel-style display font -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+
+<style>
+  /* ============================================================
+     DESIGN TOKENS
+     ============================================================ */
+  :root{
+    --grass:        #6abe30;
+    --grass-dark:   #3f7d20;
+    --grass-shade:  #2c5c14;
+    --dirt:         #8b5a2b;
+    --dirt-dark:    #5e3c1c;
+    --stone:        #8a8a8a;
+    --stone-dark:   #5c5c5c;
+    --sky-top:      #6ec8ff;
+    --sky-bottom:   #bdeaff;
+    --emerald:      #17c78b;
+    --emerald-dark: #0e8f63;
+    --gold:         #ffcd3c;
+    --gold-dark:    #c98f0e;
+    --redstone:     #e14b3a;
+    --redstone-dark:#a8291d;
+    --ink:          #2b1d0e;
+    --paper:        #f4e9d0;
+    --paper-dark:   #e2cfa0;
+    --panel:        rgba(20,20,10,0.72);
+
+    --font-pixel: 'Press Start 2P', monospace;
+    --font-body:  'VT323', monospace;
+
+    --px: 4px; /* base pixel unit for chunky borders */
+  }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+  html,body{ margin:0; padding:0; height:100%; overflow-x:hidden; }
+
+  body{
+    font-family: var(--font-body);
+    color: var(--ink);
+    background: linear-gradient(var(--sky-top), var(--sky-bottom) 70%);
+    min-height:100vh;
+    position:relative;
+    image-rendering: pixelated;
+  }
+
+  /* Respect reduced motion */
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:0.001ms !important; animation-iteration-count:1 !important; transition-duration:0.001ms !important; }
+  }
+
+  h1,h2,h3, .pixel-font{ font-family: var(--font-pixel); }
+
+  button{ font-family: var(--font-body); }
+
+  /* ============================================================
+     SCENE BACKGROUND — sky, clouds, ground layers
+     ============================================================ */
+  #scene{
+    position:fixed; inset:0; z-index:0; overflow:hidden;
+    background: linear-gradient(var(--sky-top), var(--sky-bottom) 75%);
+  }
+
+  .cloud{
+    position:absolute; background:#fff; opacity:0.9;
+    box-shadow: var(--px) 0 0 0 #fff, calc(var(--px) * -1) 0 0 0 #fff;
+    border: 3px solid rgba(255,255,255,0.6);
+  }
+  .cloud::before, .cloud::after{
+    content:''; position:absolute; background:inherit;
+  }
+
+  @keyframes driftRight{ from{ transform:translateX(-20vw);} to{ transform:translateX(120vw);} }
+  @keyframes driftRight2{ from{ transform:translateX(-40vw);} to{ transform:translateX(140vw);} }
+
+  .ground-layer{
+    position:absolute; left:0; right:0; height:14vh; min-height:70px;
+  }
+  #layer-grass{
+    bottom: 28vh; min-height:26px; height:3.2vh;
+    background: repeating-linear-gradient(90deg, var(--grass) 0 24px, var(--grass-dark) 24px 26px);
+    border-top:4px solid #7fd83f;
+    border-bottom:4px solid var(--grass-shade);
+  }
+  #layer-dirt{
+    bottom: 14vh; height:14vh;
+    background: repeating-linear-gradient(90deg, var(--dirt) 0 24px, var(--dirt-dark) 24px 26px),
+                repeating-linear-gradient(0deg, rgba(0,0,0,0.08) 0 6px, transparent 6px 26px);
+    border-bottom:4px solid var(--dirt-dark);
+  }
+  #layer-stone{
+    bottom:0; height:14vh;
+    background: repeating-linear-gradient(90deg, var(--stone) 0 24px, var(--stone-dark) 24px 26px),
+                repeating-linear-gradient(0deg, rgba(0,0,0,0.12) 0 6px, transparent 6px 26px);
+  }
+
+  .bg-tree{
+    position:absolute; bottom:calc(28vh - 4px); width:44px; height:96px;
+  }
+  .bg-tree .trunk{
+    position:absolute; bottom:0; left:50%; transform:translateX(-50%);
+    width:14px; height:38px; background:var(--dirt-dark);
+  }
+  .bg-tree .leaves{
+    position:absolute; top:0; left:0; width:44px; height:66px;
+    background:var(--grass-dark);
+    box-shadow: 0 -10px 0 -4px var(--grass-dark);
+  }
+
+  /* Falling / floating particles (pixel blocks) */
+  .particle{
+    position:absolute; top:-20px; width:10px; height:10px; opacity:0.85;
+    animation-name: fall; animation-timing-function: linear; animation-iteration-count: infinite;
+  }
+  @keyframes fall{
+    0%{ transform: translateY(-5vh) rotate(0deg); }
+    100%{ transform: translateY(110vh) rotate(180deg); }
+  }
+
+  /* ============================================================
+     APP SHELL / SCREENS
+     ============================================================ */
+  #app{
+    position:relative; z-index:2; min-height:100vh;
+    display:flex; align-items:center; justify-content:center;
+    padding: 24px 16px 48px;
+  }
+
+  .screen{
+    width:100%; max-width:560px;
+    display:none;
+    animation: screenIn 0.5s ease both;
+  }
+  .screen.active{ display:block; }
+
+  @keyframes screenIn{
+    from{ opacity:0; transform: translateY(18px) scale(0.98); }
+    to{ opacity:1; transform: translateY(0) scale(1); }
+  }
+  @keyframes screenOut{
+    from{ opacity:1; transform: translateY(0) scale(1); }
+    to{ opacity:0; transform: translateY(-18px) scale(0.98); }
+  }
+  .screen.leaving{ animation: screenOut 0.35s ease both; }
+
+  /* Minecraft-style dialogue / inventory panel */
+  .panel{
+    background: var(--panel);
+    border: var(--px) solid #000;
+    box-shadow:
+      inset -4px -4px 0 0 rgba(0,0,0,0.45),
+      inset 4px 4px 0 0 rgba(255,255,255,0.12),
+      0 10px 0 0 rgba(0,0,0,0.25);
+    padding: 28px 22px;
+    color:#f4f1e6;
+    text-align:center;
+  }
+
+  .eyebrow{
+    font-family: var(--font-pixel);
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--gold);
+    margin-bottom: 14px;
+    text-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+  }
+
+  .headline{
+    font-family: var(--font-pixel);
+    font-size: clamp(15px, 4.4vw, 22px);
+    line-height:1.6;
+    margin: 0 0 22px;
+    text-shadow: 2px 2px 0 rgba(0,0,0,0.55);
+  }
+
+  .subtext{
+    font-family: var(--font-body);
+    font-size: clamp(17px, 4vw, 20px);
+    color:#e6e2d3;
+    margin: -10px 0 20px;
+    min-height: 26px;
+  }
+
+  /* ============================================================
+     PIXEL BUTTONS
+     ============================================================ */
+  .pixel-btn{
+    position:relative;
+    font-family:var(--font-pixel);
+    font-size: 12px;
+    color:#fff;
+    border:4px solid #000;
+    padding: 16px 20px;
+    cursor:pointer;
+    text-shadow: 2px 2px 0 rgba(0,0,0,0.4);
+    box-shadow:
+      inset -4px -4px 0 0 rgba(0,0,0,0.35),
+      inset 4px 4px 0 0 rgba(255,255,255,0.35),
+      0 6px 0 0 rgba(0,0,0,0.35);
+    transition: transform 0.12s ease;
+    user-select:none;
+    min-height:52px;
+    touch-action: manipulation;
+  }
+  .pixel-btn:hover{ transform: translateY(-3px) scale(1.03); }
+  .pixel-btn:active{ transform: translateY(1px) scale(0.98); box-shadow:
+      inset -4px -4px 0 0 rgba(0,0,0,0.35),
+      inset 4px 4px 0 0 rgba(255,255,255,0.35),
+      0 2px 0 0 rgba(0,0,0,0.35); }
+
+  .btn-grass{ background: var(--grass); }
+  .btn-grass:hover{ background:#79cf3d; }
+  .btn-redstone{ background: var(--redstone); }
+  .btn-redstone:hover{ background:#ea5a48; }
+  .btn-gold{ background: var(--gold); color:#3a2a05; text-shadow:2px 2px 0 rgba(255,255,255,0.25); }
+  .btn-gold:hover{ background:#ffd85e; }
+  .btn-emerald{ background: var(--emerald); }
+  .btn-emerald:hover{ background:#20e0a2; }
+  .btn-disabled{
+    opacity:0.45; cursor:not-allowed; filter:grayscale(0.3);
+  }
+  .btn-disabled:hover{ transform:none; }
+
+  /* particle burst container attached to buttons */
+  .btn-wrap{ position:relative; display:inline-block; }
+
+  /* ============================================================
+     SCREEN 1 — YES / NO QUESTION
+     ============================================================ */
+  .choice-row{
+    display:flex; gap:18px; justify-content:center; margin-top:6px;
+    position:relative; min-height:120px; align-items:center;
+  }
+  #yesBtn{ transform: scale(1); will-change:transform; }
+  #noBtn{ transition: transform 0.25s ease, background 0.15s; }
+
+  /* ============================================================
+     SCREEN 2 — ACTIVITIES
+     ============================================================ */
+  .activity-grid{
+    display:grid; grid-template-columns: repeat(2, 1fr); gap:12px;
+    margin: 6px 0 20px;
+  }
+  .activity-card{
+    background: var(--paper);
+    border: 4px solid #000;
+    box-shadow:
+      inset -4px -4px 0 0 rgba(0,0,0,0.15),
+      inset 4px 4px 0 0 rgba(255,255,255,0.5);
+    color: var(--ink);
+    padding: 14px 8px;
+    cursor:pointer;
+    text-align:center;
+    font-family: var(--font-body);
+    font-size: 17px;
+    transition: transform 0.15s ease, background 0.15s ease;
+    min-height: 92px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+  }
+  .activity-card .icon{ font-size:26px; line-height:1; }
+  .activity-card:hover{ transform: translateY(-3px); background:#fff3d6; }
+  .activity-card.selected{
+    background: var(--emerald);
+    color:#fff;
+    border-color:#063;
+    animation: cardPop 0.35s ease;
+    box-shadow:
+      inset -4px -4px 0 0 rgba(0,0,0,0.35),
+      inset 4px 4px 0 0 rgba(255,255,255,0.35);
+  }
+  @keyframes cardPop{
+    0%{ transform:scale(1); }
+    40%{ transform:scale(1.08); }
+    100%{ transform:scale(1); }
+  }
+
+  /* ============================================================
+     SCREEN 3 — DATE PICKER
+     ============================================================ */
+  .date-box{
+    background: var(--paper);
+    border:4px solid #000;
+    padding: 18px;
+    margin: 10px 0 20px;
+    box-shadow:
+      inset -4px -4px 0 0 rgba(0,0,0,0.15),
+      inset 4px 4px 0 0 rgba(255,255,255,0.5);
+  }
+  #dateInput{
+    font-family: var(--font-body);
+    font-size: 20px;
+    padding: 12px;
+    width:100%;
+    border: 3px solid #000;
+    background:#fffdf6;
+    color: var(--ink);
+  }
+  .selected-date-display{
+    font-family: var(--font-pixel);
+    font-size: 12px;
+    color: var(--emerald-dark);
+    margin-top: 14px;
+    min-height: 16px;
+  }
+
+  /* ============================================================
+     SCREEN 4 — CONFIRM SUMMARY
+     ============================================================ */
+  .summary-box{
+    background: var(--paper);
+    border:4px solid #000;
+    color: var(--ink);
+    padding: 18px;
+    margin: 10px 0 22px;
+    text-align:left;
+    font-size:19px;
+    box-shadow:
+      inset -4px -4px 0 0 rgba(0,0,0,0.15),
+      inset 4px 4px 0 0 rgba(255,255,255,0.5);
+  }
+  .summary-box .row{ display:flex; justify-content:space-between; padding:6px 0; border-bottom:2px dashed var(--paper-dark); }
+  .summary-box .row:last-child{ border-bottom:none; }
+  .summary-box .label{ font-family:var(--font-pixel); font-size:10px; color:var(--dirt-dark); }
+
+  /* ============================================================
+     SCREEN 5 — ENVELOPE
+     ============================================================ */
+  .envelope-stage{
+    position:relative; height: 260px; margin: 10px auto 24px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .envelope{
+    position:relative; width:200px; height:140px; cursor:pointer;
+    filter: drop-shadow(0 10px 0 rgba(0,0,0,0.35));
+  }
+  .envelope .body{
+    position:absolute; inset:0; background: var(--paper);
+    border:4px solid #000;
+  }
+  .envelope .flap{
+    position:absolute; top:-4px; left:-4px; right:-4px; height:74px;
+    background: var(--paper-dark);
+    border:4px solid #000;
+    clip-path: polygon(0 0, 100% 0, 50% 100%);
+    transform-origin: top center;
+    transition: transform 0.6s cubic-bezier(.2,.9,.3,1.2);
+  }
+  .envelope.open .flap{ transform: rotateX(180deg) translateY(-4px); }
+  .envelope .seal{
+    position:absolute; top:52px; left:50%; transform:translate(-50%,0);
+    width:34px; height:34px; background: var(--redstone);
+    border:3px solid #000;
+    display:flex; align-items:center; justify-content:center;
+    font-size:16px; z-index:3;
+    transition: opacity 0.2s ease;
+  }
+  .envelope.open .seal{ opacity:0; }
+  .letter{
+    position:absolute; left:12px; right:12px; bottom:6px;
+    height: 96px;
+    background:#fffdf6;
+    border:3px solid #000;
+    transform: translateY(0);
+    transition: transform 0.7s ease 0.15s;
+    z-index:2;
+    display:flex; align-items:center; justify-content:center;
+    font-family: var(--font-pixel); font-size:9px; color:var(--ink); text-align:center; padding:8px;
+  }
+  .envelope.open .letter{ transform: translateY(-150px); }
+
+  .hint-blink{ animation: blink 1.4s ease-in-out infinite; font-family:var(--font-pixel); font-size:11px; color:#fff; text-shadow:2px 2px 0 rgba(0,0,0,0.5); }
+  @keyframes blink{ 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+
+  .float-heart{
+    position:absolute; font-size:18px; pointer-events:none;
+    animation: floatUp 1.6s ease-out forwards;
+  }
+  @keyframes floatUp{
+    0%{ transform: translateY(0) scale(0.6); opacity:1; }
+    100%{ transform: translateY(-140px) scale(1.2); opacity:0; }
+  }
+
+  /* ============================================================
+     SCREEN 6 — FINAL MESSAGE
+     ============================================================ */
+  .final-message{
+    font-family: var(--font-body);
+    font-size: clamp(19px, 4.6vw, 23px);
+    line-height:1.7;
+    background:#fffdf6;
+    color: var(--ink);
+    border:4px solid #000;
+    padding: 22px 18px;
+    margin: 6px 0 22px;
+    box-shadow:
+      inset -4px -4px 0 0 rgba(0,0,0,0.12),
+      inset 4px 4px 0 0 rgba(255,255,255,0.6);
+  }
+  .final-message b{ color: var(--emerald-dark); }
+
+  .whatsapp-btn{
+    background:#25D366; border-color:#000; color:#062f17;
+  }
+  .whatsapp-btn:hover{ background:#3ee27f; }
+
+  /* Confetti */
+  .confetti-piece{
+    position:fixed; top:-16px; width:10px; height:10px; z-index:50;
+    animation-name: confettiFall; animation-timing-function: ease-in; animation-iteration-count:1;
+  }
+  @keyframes confettiFall{
+    0%{ transform: translateY(0) rotate(0deg); opacity:1; }
+    100%{ transform: translateY(105vh) rotate(360deg); opacity:0.9; }
+  }
+
+  /* ============================================================
+     SOUND TOGGLE + NAV
+     ============================================================ */
+  #soundToggle{
+    position:fixed; top:14px; right:14px; z-index:10;
+    width:44px; height:44px; padding:0;
+    display:flex; align-items:center; justify-content:center;
+    font-size:18px;
+  }
+
+  .back-link{
+    display:inline-block; margin-top:14px; font-family:var(--font-pixel); font-size:9px;
+    color:#f4f1e6; opacity:0.7; cursor:pointer; text-decoration:underline;
+  }
+  .back-link:hover{ opacity:1; }
+
+  /* ============================================================
+     RESPONSIVE
+     ============================================================ */
+  @media (max-width:480px){
+    .activity-grid{ grid-template-columns: repeat(2, 1fr); gap:10px; }
+    .panel{ padding:22px 16px; }
+    .choice-row{ flex-direction:row; flex-wrap:wrap; }
+    .pixel-btn{ font-size:11px; padding:14px 16px; }
+  }
+
+  :focus-visible{ outline:3px solid var(--gold); outline-offset:3px; }
+</style>
+</head>
+<body>
+
+<!-- ================= BACKGROUND SCENE ================= -->
+<div id="scene" aria-hidden="true">
+  <div class="ground-layer" id="layer-stone"></div>
+  <div class="ground-layer" id="layer-dirt"></div>
+  <div class="ground-layer" id="layer-grass"></div>
+  <div id="cloudsHolder"></div>
+  <div id="treesHolder"></div>
+  <div id="particlesHolder"></div>
+</div>
+
+<button id="soundToggle" class="pixel-btn btn-gold" aria-label="Toggle sound" title="Toggle sound">🔈</button>
+
+<!-- ================= APP ================= -->
+<div id="app">
+
+  <!-- SCREEN 1: QUESTION -->
+  <section class="screen active" id="screen-question" data-screen="question">
+    <div class="panel">
+      <div class="eyebrow">◆ NEW QUEST ◆</div>
+      <h1 class="headline">Hey! Can we meet this weekend? 😊</h1>
+      <div class="subtext" id="noMessage">&nbsp;</div>
+      <div class="choice-row">
+        <div class="btn-wrap">
+          <button class="pixel-btn btn-grass" id="yesBtn">YES 🟩</button>
+        </div>
+        <div class="btn-wrap">
+          <button class="pixel-btn btn-redstone" id="noBtn">NO 🟥</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCREEN 2: ACTIVITY -->
+  <section class="screen" id="screen-activity" data-screen="activity">
+    <div class="panel">
+      <div class="eyebrow">◆ QUEST 2 OF 4 ◆</div>
+      <h1 class="headline">YAY! 🎉 Let's choose what we should do!</h1>
+      <div class="activity-grid" id="activityGrid">
+        <button class="activity-card" data-activity="Movie 🎬"><span class="icon">🎬</span>Movie</button>
+        <button class="activity-card" data-activity="Evening Walk 🌆"><span class="icon">🌆</span>Evening Walk</button>
+        <button class="activity-card" data-activity="Zoo 🦁"><span class="icon">🦁</span>Zoo</button>
+        <button class="activity-card" data-activity="Burger King 🍔"><span class="icon">🍔</span>Burger King</button>
+        <button class="activity-card" data-activity="Cafe ☕"><span class="icon">☕</span>Cafe</button>
+        <button class="activity-card" data-activity="Temple 🛕"><span class="icon">🛕</span>Temple</button>
+      </div>
+      <div class="subtext" id="activityMessage">&nbsp;</div>
+      <button class="pixel-btn btn-disabled" id="continueToDateBtn" disabled>CONTINUE →</button>
+    </div>
+  </section>
+
+  <!-- SCREEN 3: DATE -->
+  <section class="screen" id="screen-date" data-screen="date">
+    <div class="panel">
+      <div class="eyebrow">◆ QUEST 3 OF 4 ◆</div>
+      <h1 class="headline">Now choose our day 📅</h1>
+      <div class="date-box">
+        <input type="date" id="dateInput" aria-label="Choose a date">
+        <div class="selected-date-display" id="selectedDateDisplay">&nbsp;</div>
+      </div>
+      <button class="pixel-btn btn-disabled" id="continueToConfirmBtn" disabled>CONTINUE →</button>
+      <div><span class="back-link" data-back="activity">← back</span></div>
+    </div>
+  </section>
+
+  <!-- SCREEN 4: CONFIRM -->
+  <section class="screen" id="screen-confirm" data-screen="confirm">
+    <div class="panel">
+      <div class="eyebrow">◆ QUEST 4 OF 4 ◆</div>
+      <h1 class="headline">Perfect! 💚</h1>
+      <div class="summary-box">
+        <div class="row"><span class="label">ACTIVITY</span><span id="summaryActivity">—</span></div>
+        <div class="row"><span class="label">DATE</span><span id="summaryDate">—</span></div>
+      </div>
+      <button class="pixel-btn btn-gold" id="openSurpriseBtn">OPEN YOUR SURPRISE ✉️</button>
+      <div><span class="back-link" data-back="date">← back</span></div>
+    </div>
+  </section>
+
+  <!-- SCREEN 5: ENVELOPE -->
+  <section class="screen" id="screen-envelope" data-screen="envelope">
+    <div class="panel">
+      <div class="eyebrow">◆ A MESSAGE ARRIVES ◆</div>
+      <h1 class="headline">You have a message...</h1>
+      <div class="envelope-stage" id="envelopeStage">
+        <div class="envelope" id="envelope">
+          <div class="letter" id="letterPreview">Open me!</div>
+          <div class="body"></div>
+          <div class="seal">✉️</div>
+          <div class="flap"></div>
+        </div>
+      </div>
+      <div class="hint-blink">TAP THE ENVELOPE ✦</div>
+    </div>
+  </section>
+
+  <!-- SCREEN 6: FINAL MESSAGE -->
+  <section class="screen" id="screen-final" data-screen="final">
+    <div class="panel">
+      <div class="eyebrow">◆ QUEST COMPLETE ◆</div>
+      <h1 class="headline">Thank you for choosing ❤️</h1>
+      <div class="final-message" id="finalMessageText"></div>
+      <button class="pixel-btn whatsapp-btn" id="sendWhatsappBtn">SEND CONFIRMATION ON WHATSAPP 💬</button>
+    </div>
+  </section>
+
+</div>
+
+<script>
+/* =====================================================================
+   CONFIGURATION — edit values in this section
+   ===================================================================== */
+
+// Replace with your friend's WhatsApp number in international format,
+// digits only, no spaces, no "+", no leading zeros.
+// Example: for +1 415 555 0100 use "14155550100"
+const WHATSAPP_NUMBER = "YOUR_NUMBER_HERE";
+
+/* =====================================================================
+   APPLICATION STATE
+   ===================================================================== */
+let selectedActivity = null;
+let selectedDate = null;   // stored as a Date object
+let yesScale = 1;
+let noClickCount = 0;
+let soundEnabled = false;
+
+/* =====================================================================
+   AUDIO — tiny Web Audio API blips, no external files, off by default
+   ===================================================================== */
+let audioCtx = null;
+function ensureAudio(){
+  if (!audioCtx){
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch(e){ audioCtx = null; }
+  }
+}
+function blip(freq = 440, duration = 0.09){
+  if (!soundEnabled) return;
+  ensureAudio();
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'square';
+  osc.frequency.value = freq;
+  gain.gain.value = 0.06;
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start();
+  gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+  osc.stop(audioCtx.currentTime + duration);
+}
+
+const soundToggle = document.getElementById('soundToggle');
+soundToggle.addEventListener('click', () => {
+  soundEnabled = !soundEnabled;
+  soundToggle.textContent = soundEnabled ? '🔊' : '🔈';
+  if (soundEnabled){ ensureAudio(); blip(660, 0.08); }
+});
+
+/* =====================================================================
+   SCREEN NAVIGATION
+   ===================================================================== */
+function goToScreen(name){
+  const current = document.querySelector('.screen.active');
+  const next = document.querySelector(`.screen[data-screen="${name}"]`);
+  if (!next || next === current) return;
+
+  if (current){
+    current.classList.add('leaving');
+    current.classList.remove('active');
+    setTimeout(() => current.classList.remove('leaving'), 360);
+  }
+  next.classList.add('active');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+document.querySelectorAll('.back-link').forEach(link => {
+  link.addEventListener('click', () => goToScreen(link.dataset.back));
+});
+
+/* =====================================================================
+   BACKGROUND SCENE — clouds, trees, floating particles
+   ===================================================================== */
+function buildClouds(){
+  const holder = document.getElementById('cloudsHolder');
+  const cloudCount = window.innerWidth < 600 ? 3 : 5;
+  for (let i = 0; i < cloudCount; i++){
+    const c = document.createElement('div');
+    c.className = 'cloud';
+    const w = 60 + Math.random() * 60;
+    const h = w * 0.4;
+    c.style.width = w + 'px';
+    c.style.height = h + 'px';
+    c.style.top = (6 + Math.random() * 30) + 'vh';
+    c.style.animation = `${Math.random() > 0.5 ? 'driftRight' : 'driftRight2'} ${40 + Math.random()*30}s linear infinite`;
+    c.style.animationDelay = (-Math.random()*30) + 's';
+    holder.appendChild(c);
+  }
+}
+
+function buildTrees(){
+  const holder = document.getElementById('treesHolder');
+  const positions = [6, 18, 78, 90, 40, 63];
+  positions.forEach((pos, i) => {
+    if (window.innerWidth < 700 && (i === 4 || i === 5)) return; // fewer on mobile
+    const t = document.createElement('div');
+    t.className = 'bg-tree';
+    t.style.left = pos + 'vw';
+    t.innerHTML = '<div class="leaves"></div><div class="trunk"></div>';
+    holder.appendChild(t);
+  });
+}
+
+function buildParticles(){
+  const holder = document.getElementById('particlesHolder');
+  const colors = ['#6abe30', '#8b5a2b', '#8a8a8a', '#ffcd3c'];
+  const count = window.innerWidth < 600 ? 10 : 18;
+  for (let i = 0; i < count; i++){
+    const p = document.createElement('div');
+    p.className = 'particle';
+    p.style.left = Math.random() * 100 + 'vw';
+    p.style.background = colors[Math.floor(Math.random()*colors.length)];
+    p.style.animationDuration = (10 + Math.random()*14) + 's';
+    p.style.animationDelay = (-Math.random()*20) + 's';
+    holder.appendChild(p);
+  }
+}
+
+buildClouds();
+buildTrees();
+buildParticles();
+
+/* =====================================================================
+   SCREEN 1 — YES / NO LOGIC
+   ===================================================================== */
+const yesBtn = document.getElementById('yesBtn');
+const noBtn = document.getElementById('noBtn');
+const noMessageEl = document.getElementById('noMessage');
+const questionScreen = document.getElementById('screen-question');
+
+const noMessages = [
+  "Are you sure? 👀",
+  "Really? 😭",
+  "Think again...",
+  "Come onnn 😅",
+  "The YES button is getting stronger! 💪",
+  "It's growing bigger, look! 🌱",
+  "The NO button is getting nervous 😬",
+  "Resistance is futile... 🟩",
+  "It's basically the whole screen now 😂",
+  "You know you want to. 😌"
+];
+
+function applyYesScale(){
+  // Cap the visual transform so layout never breaks, but keep the
+  // underlying yesScale value growing exactly by 0.02 per click.
+  const visualScale = Math.min(yesScale, 3.2);
+  yesBtn.style.transform = `scale(${visualScale})`;
+}
+
+noBtn.addEventListener('click', () => {
+  noClickCount += 1;
+  yesScale += 0.02; // grows by exactly 2% of the base size each click
+  applyYesScale();
+  blip(220, 0.07);
+
+  // playful message, cycling through the list once exhausted
+  const msg = noMessages[Math.min(noClickCount - 1, noMessages.length - 1)];
+  noMessageEl.textContent = noClickCount <= noMessages.length
+    ? msg
+    : `${msg} (${noClickCount}x) 🟩🟩🟩`;
+
+  // wobble animation for NO click feedback
+  noBtn.animate([
+    { transform: 'translate(0,0) rotate(0deg)' },
+    { transform: 'translate(-4px,2px) rotate(-4deg)' },
+    { transform: 'translate(4px,-2px) rotate(4deg)' },
+    { transform: 'translate(0,0) rotate(0deg)' }
+  ], { duration: 260, easing: 'ease-in-out' });
+
+  // playfully nudge NO to a random nearby spot, staying inside its row
+  const dx = (Math.random() - 0.5) * 40;
+  const dy = (Math.random() - 0.5) * 16;
+  noBtn.style.transform = `translate(${dx}px, ${dy}px) scale(${Math.max(0.6, 1 - noClickCount*0.015)})`;
+});
+
+yesBtn.addEventListener('click', () => {
+  blip(523, 0.12);
+  launchConfetti();
+  questionScreen.classList.add('leaving');
+  setTimeout(() => {
+    questionScreen.classList.remove('active', 'leaving');
+    goToScreenDirect('activity');
+  }, 300);
+});
+
+// helper used right after the custom YES transition above
+function goToScreenDirect(name){
+  const next = document.querySelector(`.screen[data-screen="${name}"]`);
+  next.classList.add('active');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function launchConfetti(){
+  const colors = ['#6abe30', '#ffcd3c', '#17c78b', '#e14b3a', '#6ec8ff'];
+  const total = 40;
+  for (let i = 0; i < total; i++){
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.left = Math.random() * 100 + 'vw';
+    piece.style.background = colors[Math.floor(Math.random()*colors.length)];
+    piece.style.animationDuration = (1.6 + Math.random()*1.4) + 's';
+    piece.style.animationDelay = (Math.random()*0.4) + 's';
+    document.body.appendChild(piece);
+    setTimeout(() => piece.remove(), 3400);
+  }
+}
+
+/* =====================================================================
+   SCREEN 2 — ACTIVITY SELECTION
+   ===================================================================== */
+const activityCards = document.querySelectorAll('.activity-card');
+const activityMessage = document.getElementById('activityMessage');
+const continueToDateBtn = document.getElementById('continueToDateBtn');
+
+activityCards.forEach(card => {
+  card.addEventListener('click', () => {
+    activityCards.forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    selectedActivity = card.dataset.activity;
+    activityMessage.textContent = 'Great choice! ❤️';
+    continueToDateBtn.disabled = false;
+    continueToDateBtn.classList.remove('btn-disabled');
+    continueToDateBtn.classList.add('btn-emerald');
+    blip(392, 0.09);
+  });
+});
+
+continueToDateBtn.addEventListener('click', () => {
+  if (!selectedActivity) return; // guard: no activity selected
+  blip(440, 0.1);
+  goToScreen('date');
+});
+
+/* =====================================================================
+   SCREEN 3 — DATE SELECTION
+   ===================================================================== */
+const dateInput = document.getElementById('dateInput');
+const selectedDateDisplay = document.getElementById('selectedDateDisplay');
+const continueToConfirmBtn = document.getElementById('continueToConfirmBtn');
+
+// disallow past dates
+(function setMinDate(){
+  const today = new Date();
+  const iso = today.toISOString().split('T')[0];
+  dateInput.min = iso;
+})();
+
+function formatDate(d){
+  return d.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+dateInput.addEventListener('change', () => {
+  if (!dateInput.value){
+    selectedDate = null;
+    selectedDateDisplay.textContent = '';
+    continueToConfirmBtn.disabled = true;
+    continueToConfirmBtn.classList.add('btn-disabled');
+    continueToConfirmBtn.classList.remove('btn-emerald');
+    return;
+  }
+  // parse as local date to avoid timezone shifting the day
+  const [y, m, d] = dateInput.value.split('-').map(Number);
+  const picked = new Date(y, m - 1, d);
+  const todayMidnight = new Date();
+  todayMidnight.setHours(0,0,0,0);
+
+  if (picked < todayMidnight){
+    selectedDateDisplay.textContent = "That day's already passed — pick an upcoming one 🌱";
+    selectedDate = null;
+    continueToConfirmBtn.disabled = true;
+    continueToConfirmBtn.classList.add('btn-disabled');
+    continueToConfirmBtn.classList.remove('btn-emerald');
+    return;
+  }
+
+  selectedDate = picked;
+  selectedDateDisplay.textContent = `Selected: ${formatDate(selectedDate)}`;
+  continueToConfirmBtn.disabled = false;
+  continueToConfirmBtn.classList.remove('btn-disabled');
+  continueToConfirmBtn.classList.add('btn-emerald');
+  blip(392, 0.09);
+});
+
+continueToConfirmBtn.addEventListener('click', () => {
+  if (!selectedActivity || !selectedDate) return; // guard
+  document.getElementById('summaryActivity').textContent = selectedActivity;
+  document.getElementById('summaryDate').textContent = formatDate(selectedDate);
+  blip(440, 0.1);
+  goToScreen('confirm');
+});
+
+/* =====================================================================
+   SCREEN 4 — CONFIRM → ENVELOPE
+   ===================================================================== */
+document.getElementById('openSurpriseBtn').addEventListener('click', () => {
+  if (!selectedActivity || !selectedDate) return; // guard
+  blip(523, 0.1);
+  goToScreen('envelope');
+});
+
+/* =====================================================================
+   SCREEN 5 — ENVELOPE ANIMATION
+   ===================================================================== */
+const envelope = document.getElementById('envelope');
+const envelopeStage = document.getElementById('envelopeStage');
+let envelopeOpened = false;
+
+function spawnHearts(){
+  const symbols = ['💚','✨','💫','🟩'];
+  for (let i = 0; i < 10; i++){
+    const h = document.createElement('div');
+    h.className = 'float-heart';
+    h.textContent = symbols[Math.floor(Math.random()*symbols.length)];
+    h.style.left = (40 + Math.random()*40) + '%';
+    h.style.bottom = '30%';
+    h.style.animationDelay = (Math.random()*0.4) + 's';
+    envelopeStage.appendChild(h);
+    setTimeout(() => h.remove(), 2200);
+  }
+}
+
+function openEnvelope(){
+  if (envelopeOpened) return;
+  envelopeOpened = true;
+  envelope.classList.add('open');
+  blip(659, 0.15);
+  spawnHearts();
+  setTimeout(() => {
+    buildFinalMessage();
+    goToScreen('final');
+  }, 1000);
+}
+
+envelope.addEventListener('click', openEnvelope);
+envelope.addEventListener('touchend', (e) => { e.preventDefault(); openEnvelope(); }, { passive:false });
+
+/* =====================================================================
+   SCREEN 6 — FINAL MESSAGE + WHATSAPP
+   ===================================================================== */
+function buildFinalMessage(){
+  const activityText = selectedActivity || 'our plan';
+  const dateText = selectedDate ? formatDate(selectedDate) : 'soon';
+  const el = document.getElementById('finalMessageText');
+  el.innerHTML = `Thank you for choosing<br><b>${activityText}</b><br>on <b>${dateText}</b>! 💚<br><br>
+    I'm looking forward to spending some time together 😊`;
+}
+
+document.getElementById('sendWhatsappBtn').addEventListener('click', () => {
+  if (!selectedActivity || !selectedDate){
+    alert("Something's missing — please go back and finish choosing an activity and date first.");
+    return;
+  }
+  const dateText = formatDate(selectedDate);
+  const message =
+`Hey! 😊 Just confirming our plan:
+
+Activity: ${selectedActivity}
+Date: ${dateText}
+
+Looking forward to it! ❤️`;
+
+  const encoded = encodeURIComponent(message);
+  const number = WHATSAPP_NUMBER.replace(/[^0-9]/g, '');
+
+  if (!number || WHATSAPP_NUMBER === 'YOUR_NUMBER_HERE'){
+    alert('WhatsApp number not set yet — edit WHATSAPP_NUMBER near the top of the script.');
+    return;
+  }
+
+  // wa.me click-to-chat works both on mobile (opens the app) and
+  // desktop (opens WhatsApp Web) without needing any backend.
+  const url = `https://wa.me/${number}?text=${encoded}`;
+  window.open(url, '_blank');
+});
+</script>
+</body>
+</html>
