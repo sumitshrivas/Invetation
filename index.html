@@ -554,7 +554,7 @@
       <div class="eyebrow">◆ QUEST COMPLETE ◆</div>
       <h1 class="headline">Thank you for choosing ❤️</h1>
       <div class="final-message" id="finalMessageText"></div>
-      <button class="pixel-btn whatsapp-btn" id="sendWhatsappBtn">SEND CONFIRMATION ON WHATSAPP 💬</button>
+      <div id="whatsappBtnHolder" style="display:flex; flex-direction:column; gap:12px; align-items:center;"></div>
     </div>
   </section>
 
@@ -565,10 +565,11 @@
    CONFIGURATION — edit values in this section
    ===================================================================== */
 
-// Replace with your friend's WhatsApp number in international format,
-// digits only, no spaces, no "+", no leading zeros.
-// Example: for +1 415 555 0100 use "14155550100"
-const WHATSAPP_NUMBER = "YOUR_NUMBER_HERE";
+// Recipient to send the confirmation to.
+// International format, digits only, no spaces, no "+".
+const WHATSAPP_RECIPIENTS = [
+  { label: "Confirmation", number: "918962172324" }
+];
 
 /* =====================================================================
    APPLICATION STATE
@@ -910,33 +911,52 @@ function buildFinalMessage(){
     I'm looking forward to spending some time together 😊`;
 }
 
-document.getElementById('sendWhatsappBtn').addEventListener('click', () => {
-  if (!selectedActivity || !selectedDate){
-    alert("Something's missing — please go back and finish choosing an activity and date first.");
-    return;
-  }
+function buildWhatsappMessage(){
   const dateText = formatDate(selectedDate);
-  const message =
-`Hey! 😊 Just confirming our plan:
+  return `Hey! 😊 Just confirming our plan:
 
 Activity: ${selectedActivity}
 Date: ${dateText}
 
 Looking forward to it! ❤️`;
+}
 
-  const encoded = encodeURIComponent(message);
-  const number = WHATSAPP_NUMBER.replace(/[^0-9]/g, '');
-
-  if (!number || WHATSAPP_NUMBER === '918962172324'){
-    alert('WhatsApp number not set yet — edit WHATSAPP_NUMBER near the top of the script.');
+function sendWhatsapp(rawNumber){
+  if (!selectedActivity || !selectedDate){
+    alert("Something's missing — please go back and finish choosing an activity and date first.");
     return;
   }
-
+  const number = (rawNumber || '').replace(/[^0-9]/g, '');
+  if (!number){
+    alert('This WhatsApp number is not set yet — edit WHATSAPP_RECIPIENTS near the top of the script.');
+    return;
+  }
+  const encoded = encodeURIComponent(buildWhatsappMessage());
   // wa.me click-to-chat works both on mobile (opens the app) and
   // desktop (opens WhatsApp Web) without needing any backend.
+  // NOTE: each link can only message one number — a single click-to-chat
+  // link cannot send to multiple people at once, so we render one button
+  // per recipient below.
   const url = `https://wa.me/${number}?text=${encoded}`;
   window.open(url, '_blank');
-});
+}
+
+// Build one "Send" button per recipient in WHATSAPP_RECIPIENTS.
+// With a single recipient, shows one clean "SEND CONFIRMATION" button.
+function buildWhatsappButtons(){
+  const holder = document.getElementById('whatsappBtnHolder');
+  holder.innerHTML = '';
+  WHATSAPP_RECIPIENTS.forEach(({ label, number }) => {
+    const btn = document.createElement('button');
+    btn.className = 'pixel-btn whatsapp-btn';
+    btn.textContent = WHATSAPP_RECIPIENTS.length > 1
+      ? `SEND TO ${label.toUpperCase()} 💬`
+      : 'SEND CONFIRMATION ON WHATSAPP 💬';
+    btn.addEventListener('click', () => sendWhatsapp(number));
+    holder.appendChild(btn);
+  });
+}
+buildWhatsappButtons();
 </script>
 </body>
 </html>
